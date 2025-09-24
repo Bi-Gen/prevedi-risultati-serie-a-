@@ -4,17 +4,22 @@ from datetime import datetime
 
 class SerieADataFetcher:
     def __init__(self):
-        # DataHub Serie A dataset URL
-        self.base_url = "https://datahub.io/sports-data/italian-serie-a/r/"
+        # Football-CSV GitHub cache URL
+        self.base_url = "https://raw.githubusercontent.com/footballcsv/cache.footballdata/master/"
 
     def fetch_season_data(self, season="2023-24"):
         """Fetch Serie A data for specific season"""
         try:
-            # URL per i dati Serie A da DataHub
-            url = f"{self.base_url}italian-serie-a-{season}.csv"
+            # Convert season format for Football-CSV (e.g., "2023-24" stays as is)
+            url = f"{self.base_url}{season}/it.1.csv"
             print(f"Fetching data from: {url}")
 
+            # Read CSV with proper column names
             df = pd.read_csv(url)
+
+            # Standardize column names to match our API
+            df = self.standardize_data(df)
+
             print(f"Successfully loaded {len(df)} matches")
             return df
 
@@ -22,6 +27,37 @@ class SerieADataFetcher:
             print(f"Error fetching data: {e}")
             # Fallback: crea dati dummy per test
             return self.create_dummy_data()
+
+    def standardize_data(self, df):
+        """Convert Football-CSV format to standard format"""
+        # Football-CSV format: Date, Team 1, FT, HT, Team 2
+        standardized_df = pd.DataFrame()
+
+        if 'Team 1' in df.columns and 'Team 2' in df.columns:
+            standardized_df['Date'] = df['Date']
+            standardized_df['HomeTeam'] = df['Team 1']
+            standardized_df['AwayTeam'] = df['Team 2']
+
+            # Parse FT scores (e.g., "2-1" -> FTHG=2, FTAG=1)
+            if 'FT' in df.columns:
+                ft_scores = df['FT'].str.split('-', expand=True)
+                standardized_df['FTHG'] = pd.to_numeric(ft_scores[0], errors='coerce')
+                standardized_df['FTAG'] = pd.to_numeric(ft_scores[1], errors='coerce')
+
+                # Calculate result (H/A/D)
+                standardized_df['FTR'] = standardized_df.apply(
+                    lambda row: 'H' if row['FTHG'] > row['FTAG']
+                               else 'A' if row['FTHG'] < row['FTAG']
+                               else 'D', axis=1
+                )
+
+            # Parse HT scores if available
+            if 'HT' in df.columns:
+                ht_scores = df['HT'].str.split('-', expand=True)
+                standardized_df['HTHG'] = pd.to_numeric(ht_scores[0], errors='coerce')
+                standardized_df['HTAG'] = pd.to_numeric(ht_scores[1], errors='coerce')
+
+        return standardized_df
 
     def create_dummy_data(self):
         """Create dummy data for testing"""
