@@ -4,11 +4,19 @@ import os
 from data_fetcher import SerieADataFetcher
 from injury_scraper import InjuryDataScraper
 from transfer_scraper import TransferDataScraper
+from prediction_engine import SerieAPredictionEngine
+from fixtures_fetcher import SerieAFixturesFetcher
 
 app = Flask(__name__)
 data_fetcher = SerieADataFetcher()
 injury_scraper = InjuryDataScraper()
 transfer_scraper = TransferDataScraper()
+fixtures_fetcher = SerieAFixturesFetcher()
+
+# Initialize prediction engine (will load historical data)
+print("Initializing prediction engine...")
+prediction_engine = SerieAPredictionEngine(data_fetcher, injury_scraper, transfer_scraper)
+print("Prediction engine ready!")
 
 @app.route('/')
 def home():
@@ -26,7 +34,11 @@ def home():
             "/api/injuries": "Get current injury data",
             "/api/injuries/team/<team>": "Get injuries for specific team",
             "/api/transfers": "Get recent transfer data",
-            "/api/transfers/team/<team>": "Get transfers for specific team"
+            "/api/transfers/team/<team>": "Get transfers for specific team",
+            "/api/fixtures": "Get upcoming Serie A fixtures",
+            "/api/fixtures/next-round": "Get next matchday fixtures",
+            "/api/predict/<home>/<away>": "Predict specific match",
+            "/api/predictions": "Get predictions for upcoming matches"
         },
         "supported_seasons": {
             "2023-24": "Historical data (Football-CSV)",
@@ -258,6 +270,117 @@ def get_prediction_factors():
                 "biggest_squad_changes": list(strength_changes.keys())[:3]
             },
             "note": "Combined injury and transfer data for match prediction enhancement"
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/fixtures')
+def get_fixtures():
+    try:
+        days_ahead = int(request.args.get('days', 14))
+        fixtures = fixtures_fetcher.get_upcoming_fixtures(days_ahead)
+
+        return jsonify({
+            "days_ahead": days_ahead,
+            "total_fixtures": len(fixtures),
+            "fixtures": fixtures
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/fixtures/next-round')
+def get_next_round():
+    try:
+        next_round = fixtures_fetcher.get_next_round_fixtures()
+
+        return jsonify({
+            "next_round": next_round,
+            "total_matches": len(next_round),
+            "matchday": next_round[0]['matchday'] if next_round else None
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/predict/<home>/<away>')
+def predict_match(home, away):
+    try:
+        # Generate prediction for specific match
+        prediction = prediction_engine.predict_match(home, away)
+
+        return jsonify(prediction)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/predictions')
+def get_predictions():
+    try:
+        days_ahead = int(request.args.get('days', 7))
+        prediction_type = request.args.get('type', 'all')  # all, big_matches, next_round
+
+        predictions = []
+
+        if prediction_type == 'next_round':
+            fixtures = fixtures_fetcher.get_next_round_fixtures()
+        elif prediction_type == 'big_matches':
+            fixtures = fixtures_fetcher.get_big_matches(days_ahead)
+        else:  # all
+            fixtures = fixtures_fetcher.get_upcoming_fixtures(days_ahead)
+
+        # Generate predictions for each fixture
+        for fixture in fixtures[:10]:  # Limit to 10 to avoid timeouts
+            try:
+                prediction = prediction_engine.predict_match(
+                    fixture['home_team'],
+                    fixture['away_team']
+                )
+
+                # Add fixture info to prediction
+                prediction['fixture_info'] = {
+                    'date': fixture['date'],
+                    'time': fixture.get('time', ''),
+                    'round': fixture.get('round', ''),
+                    'days_from_now': fixture['days_from_now']
+                }
+
+                predictions.append(prediction)
+
+            except Exception as pred_error:
+                print(f"Error predicting {fixture['home_team']} vs {fixture['away_team']}: {pred_error}")
+                continue
+
+        return jsonify({
+            "prediction_type": prediction_type,
+            "days_ahead": days_ahead,
+            "total_predictions": len(predictions),
+            "predictions": predictions,
+            "generated_at": prediction_engine.historical_data.iloc[0]['Season'] if not prediction_engine.historical_data.empty else "No data"
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/predictions/big-matches')
+def get_big_match_predictions():
+    try:
+        big_matches = fixtures_fetcher.get_big_matches(14)
+        predictions = []
+
+        for match in big_matches[:5]:  # Limit big matches
+            try:
+                prediction = prediction_engine.predict_match(
+                    match['home_team'],
+                    match['away_team']
+                )
+
+                prediction['fixture_info'] = match
+                predictions.append(prediction)
+
+            except Exception as pred_error:
+                print(f"Error predicting big match: {pred_error}")
+                continue
+
+        return jsonify({
+            "big_match_predictions": predictions,
+            "total_predictions": len(predictions)
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
