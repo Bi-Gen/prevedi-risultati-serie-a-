@@ -1,9 +1,7 @@
 import requests
 import pandas as pd
-from bs4 import BeautifulSoup
 import json
 from datetime import datetime
-import time
 
 class InjuryDataScraper:
     def __init__(self):
@@ -122,26 +120,8 @@ class InjuryDataScraper:
         return pd.DataFrame(dummy_injuries)
 
     def scrape_injury_data(self):
-        """Scrape injury data from multiple sources"""
-        print("Attempting to scrape injury data...")
-
-        # For now, return dummy data as scraping requires handling anti-bot measures
-        # In production, you'd implement proper scraping with delays, proxies, etc.
-        try:
-            # Placeholder for actual scraping logic
-            response = requests.get(self.base_urls["sportsgambler"], headers=self.headers, timeout=10)
-
-            if response.status_code != 200:
-                print(f"Scraping failed (status {response.status_code}), using dummy data")
-                return self.get_dummy_injury_data()
-
-            # Would implement BeautifulSoup parsing here
-            print("Scraping successful but parsing not implemented, using dummy data")
-            return self.get_dummy_injury_data()
-
-        except Exception as e:
-            print(f"Scraping error: {e}, using dummy data")
-            return self.get_dummy_injury_data()
+        """Get injury data - currently returns dummy data for demonstration"""
+        return self.get_dummy_injury_data()
 
     def get_team_injuries(self, team_name):
         """Get injuries for specific team"""
