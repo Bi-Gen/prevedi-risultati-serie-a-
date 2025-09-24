@@ -1,5 +1,7 @@
 # Serie A Match Predictor
 
+**Repository:** https://github.com/Bi-Gen/prevedi-risultati-serie-a-
+
 Sistema di predizione per risultati delle partite di Serie A utilizzando machine learning.
 
 ## Fase attuale: Setup iniziale
