@@ -46,6 +46,44 @@ class SerieADataFetcher:
         }
         return stats
 
+    def get_teams(self, df):
+        """Extract unique teams from match data"""
+        teams = []
+        if 'HomeTeam' in df.columns and 'AwayTeam' in df.columns:
+            home_teams = set(df['HomeTeam'].unique())
+            away_teams = set(df['AwayTeam'].unique())
+            all_teams = home_teams.union(away_teams)
+
+            for team in sorted(all_teams):
+                # Get team stats
+                home_matches = df[df['HomeTeam'] == team]
+                away_matches = df[df['AwayTeam'] == team]
+
+                total_matches = len(home_matches) + len(away_matches)
+
+                if 'FTR' in df.columns:
+                    home_wins = len(home_matches[home_matches['FTR'] == 'H'])
+                    away_wins = len(away_matches[away_matches['FTR'] == 'A'])
+                    total_wins = home_wins + away_wins
+
+                    home_draws = len(home_matches[home_matches['FTR'] == 'D'])
+                    away_draws = len(away_matches[away_matches['FTR'] == 'D'])
+                    total_draws = home_draws + away_draws
+
+                    total_losses = total_matches - total_wins - total_draws
+                else:
+                    total_wins = total_draws = total_losses = 0
+
+                teams.append({
+                    'name': team,
+                    'matches_played': total_matches,
+                    'wins': total_wins,
+                    'draws': total_draws,
+                    'losses': total_losses
+                })
+
+        return teams
+
 if __name__ == "__main__":
     fetcher = SerieADataFetcher()
     data = fetcher.fetch_season_data()
